@@ -1,0 +1,5 @@
+[TIMESKETCH]
+BASEURL = https://timesketchurl
+USERNAME = admin
+PASSWORD = password
+HTTPS_VERIFY=False
