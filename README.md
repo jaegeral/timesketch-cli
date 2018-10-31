@@ -57,6 +57,28 @@ Event added, ID: 18 Date:2018-10-31T14:49:41+00:00 timestamp desc this is the de
 Add another event? (y/n)n
 ```
 
+## list sketches
+
+You can list sketches in your timesketch instance
+
+```
+timesketch-tools.py -ls
+     
+         _______               __       __      __ 
+        /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
+         / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.1
+
+            
++-----+-----------------------------+
+|  id |             Name            |
++-----+-----------------------------+
+| 130 |     test1Untitled sketch    |
+|  3  | The Greendale investigation |
++-----+-----------------------------+
+
+```
+
 
 # Open issues
 
