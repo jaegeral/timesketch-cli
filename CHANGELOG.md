@@ -9,6 +9,9 @@
 * Adjusted requirements.txt
 * adjusted .gitignore
 * version 0.1
+* version 0.2
+** create sketches capability
+** improved code quality
 
 # 2018-10-30
 

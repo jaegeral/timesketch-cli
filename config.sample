@@ -1,6 +1,6 @@
 [TIMESKETCH]
-BASEURL = https://timesketchurl
-USERNAME = admin
-PASSWORD = password
+BASEURL = https://demo.timesketch.org
+USERNAME = demo
+PASSWORD = demo
 HTTPS_VERIFY=False
-version = 0.1
+version = 0.2

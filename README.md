@@ -18,19 +18,24 @@ to add some more functionality (but will be removed as soon as every PR is merge
 # Usage
 
 ```
+timesketch-tools.py --help
+     
          _______               __       __      __ 
         /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
          / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
         /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.1
 
             
-usage: timesketch-tools.py [-h] [-v] [-ls] [-ae]
+usage: timesketch-tools.py [-h] [-v] [-ls] [-ae] [-cs] [-name [NAME]]
 
 optional arguments:
   -h, --help            show this help message and exit
   -v, --verbose         increase output verbosity
   -ls, --list_sketches  list sketches
   -ae, --add_events     add events to a sketch
+  -cs, --create_sketch  create a sketch
+  -name [NAME], --name [NAME]
+                        name if needed
 
 ```
 
@@ -44,7 +49,7 @@ timesketch-tools.py --add_events
          _______               __       __      __ 
         /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
          / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
-        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.1
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.2
 
             
 Please provide the sketch id you want to add events to as (an integer): 3
@@ -67,7 +72,7 @@ timesketch-tools.py -ls
          _______               __       __      __ 
         /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
          / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
-        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.1
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.2
 
             
 +-----+-----------------------------+
@@ -76,6 +81,24 @@ timesketch-tools.py -ls
 | 130 |     test1Untitled sketch    |
 |  3  | The Greendale investigation |
 +-----+-----------------------------+
+
+```
+
+## Create a new sketch
+
+
+
+```
+timesketch-tools.py -cs --name importantcase
+     
+         _______               __       __      __ 
+        /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
+         / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.2
+
+            
+What is the description of your new sketch? pretty base case
+Created sketch importantcase URL :https://demo.timesketch.org/sketch/198/
 
 ```
 

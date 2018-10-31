@@ -27,8 +27,8 @@ logger.addHandler(fh)
 
 
 config = configparser.ConfigParser()
-# config.read("config_demo.config")
-config.read("config_prod.config")
+config.read("config_demo.config")
+# config.read("config_prod.config")
 
 TIMESKETCH_BASEURL = config.get('TIMESKETCH', 'BASEURL')
 TIMESKETCH_USERNAME = config.get('TIMESKETCH', 'USERNAME')
@@ -136,7 +136,7 @@ def logo():
             """.format(TIMESKETCH_TOOLS_VERSION))
 
 
-def again(user_input=True):
+def again(user_input):
     # raw_input returns the empty string for "enter"
     yes = {'yes', 'y', 'ye', ''}
     no = {'no', 'n'}
@@ -197,6 +197,28 @@ def interact_add_events(a_api_client, a_sketch_id):
         do_again = again(again_input_value)
 
 
+def create_sketch(a_api_client=None, a_sketch_name=None):
+    """
+    Creates a new sketch and if ok print the URL to the sketch
+
+    :param a_api_client:
+    :param a_sketch_name:
+    """
+    logger.debug("create a sketch")
+    if a_api_client is None:
+        a_api_client = login()
+    if a_sketch_name is None:
+        a_sketch_name = raw_input("What is the name of your new sketch? ")
+
+    a_sketch_description = raw_input("What is the description of your new sketch? ")
+
+    return_value = a_api_client.create_sketch(a_sketch_name, description=a_sketch_description)
+
+    element_id = return_value.id
+
+    print("Created sketch "+a_sketch_name+" URL :"+TIMESKETCH_BASEURL+"/sketch/"+str(element_id)+"/")
+
+
 if __name__ == "__main__":
 
     logo()
@@ -207,7 +229,9 @@ if __name__ == "__main__":
                         action="store_true")
     parser.add_argument("-ls", "--list_sketches", help="list sketches",
                         action="store_true")
-    parser.add_argument("-ae", "--add_events", help="add events to a sketch",action="store_true")
+    parser.add_argument("-ae", "--add_events", help="add events to a sketch", action="store_true")
+    parser.add_argument("-cs", "--create_sketch", help="create a sketch", action="store_true")
+    parser.add_argument("-name", "--name",nargs='?', help="name if needed")
 
     args = parser.parse_args()
 
@@ -220,6 +244,13 @@ if __name__ == "__main__":
     elif args.add_events:
         api_client = login()
         sketch = None
-        interact_add_events(api_client,sketch)
+        interact_add_events(api_client, sketch)
+    elif args.create_sketch:
+        api_client = login()
+        if args.name is None:
+            create_sketch(a_api_client=api_client, a_sketch_name=None)
+        else:
+            create_sketch(a_api_client=api_client, a_sketch_name=args.name)
+
     else:
-        print "no command given"
+        print("no command given")
