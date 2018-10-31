@@ -2,3 +2,6 @@ timesketch_api_client
 logging
 configparser
 argparse
+prettytable
+beautifulsoup4
+urllib3

@@ -103,4 +103,9 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-config.config
+config_demo.config
+timesketch_api_client/*
+
+venv
+venv3
+test*
