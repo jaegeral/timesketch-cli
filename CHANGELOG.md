@@ -6,7 +6,8 @@
 * ability to list searchindice
 * explore a sketch
     * currently only * will be passed as query
-
+* add Label to Event
+* display s single event
 
 
 # 2018-10-31

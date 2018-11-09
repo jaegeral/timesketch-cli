@@ -368,6 +368,47 @@ def searchindices(args):
     logger.debug(search_results)
 
 
+def event(c_args):
+    """
+        Interaction with a single event within a sketch.
+
+        Add comment
+        Add label
+        display an event
+
+
+    :param c_args:
+    :return:
+    """
+    api_client = login()
+
+    if args.sketchid is None:
+        args.sketchid = raw_input("please provide sketch id")
+
+    if c_args.option == 'display':
+        current_sketch = api_client.get_sketch(int(c_args.sketchid))
+        query_string = "_id:"+args.event_id
+        explore_result = current_sketch.explore(query_string=query_string)
+        print_timelines(explore_result)
+        return
+
+    if args.event_id is None:
+        args.event_id = raw_input("please provide event_id")
+    if args.index_id is None:
+        args.index_id = raw_input("please provide index_id")
+    if args.text is None:
+        args.text = raw_input("Please provide your Text")
+
+    if c_args.option == 'addComment':
+        add_comment_to_event(c_api_client=api_client, a_sketch_id=int(args.sketchid), a_event_id=args.event_id,
+                             a_index_id=args.index_id,a_comment_text=args.text)
+    elif c_args.option == 'addLabel':
+        add_label_to_event(c_api_client=api_client, a_sketch_id=int(args.sketchid), a_event_id=args.event_id,
+                           a_index_id=args.index_id,a_label_text=args.text)
+    else:
+        print("no command given")
+
+
 if __name__ == "__main__":
 
     logo()
@@ -397,12 +438,14 @@ if __name__ == "__main__":
     parser_modify_event = subparser.add_parser('modify_event', description="Interact with an event")
     parser_modify_event.add_argument('-o', '--option', help='output result value', action='store', required=False,
                                  choices=['addComment', 'addLabel','display'],
-                                 default='list')
+                                 default='display')
     parser_modify_event.add_argument("-eid","--event_id",nargs='?', help="event_id")
     parser_modify_event.add_argument("-iid", "--index_id", nargs='?', help="index_id")
-    #parser_sketches.set_defaults(func=event)
+    parser_modify_event.add_argument('-sid', '--sketchid', help='Sketch id', action='store', required=False)
+    parser_modify_event.add_argument('-txt', '--text', help='text to be added', action='store', required=False)
+    parser_modify_event.set_defaults(func=event)
 
-    # modify event
+    # searchindices
     parser_searchindices = subparser.add_parser('searchindices', description="Interact with an event")
     parser_searchindices.add_argument('-o', '--option', help='output result value', action='store', required=False,
                                      choices=['list'],
