@@ -1,10 +1,12 @@
 # 2018-11-09
 
 * version 0.3
+** bump version in config
 * rewirtten argparse
 * ability to list searchindice
 * explore a sketch
 ** currently only * will be passed as query
+
 
 
 # 2018-10-31
