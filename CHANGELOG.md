@@ -3,6 +3,8 @@
 * version 0.3
 * rewirtten argparse
 * ability to list searchindice
+* explore a sketch
+** currently only * will be passed as query
 
 
 # 2018-10-31

@@ -191,7 +191,9 @@ def get_date(a_date):
 
 
 def logo():
-
+        """
+        Prints the logo of timesketch as ascii art and the current version
+        """
         print("""     
          _______               __       __      __ 
         /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
@@ -285,6 +287,18 @@ def create_sketch(a_api_client=None, a_sketch_name=None):
 
     print("Created sketch "+a_sketch_name+" URL :"+TIMESKETCH_BASEURL+"/sketch/"+str(element_id)+"/")
 
+def print_timelines(c_timelines):
+    """
+    prints a table by given timeline(s)
+    :param c_timelines:
+    """
+    t = PrettyTable(['datetime', 'timestamp_desc','message', 'labels', '_id', "_index"])
+    for current_sketch in c_timelines['objects']:
+        source = current_sketch.get('_source')
+        t.add_row([source.get('datetime'), source.get('timestamp_desc'), source.get('message'), ('[%s]' % ', '.join(map(str, source.get('label')))),
+                   current_sketch.get("_id"), current_sketch.get("_index")])
+    print t
+
 
 def sketch(c_args):
     """
@@ -317,6 +331,15 @@ def sketch(c_args):
         else:
             logger.error("no sketch ID given")
             print("no sketch ID given")
+    elif c_args.option == 'explore':
+        if c_args.sketchid is not None:
+            current_sketch = c_api_client.get_sketch(int(c_args.sketchid))
+            explore_result = current_sketch.explore(query_string="*")
+            print_timelines(explore_result)
+        else:
+            logger.error("no sketch ID given")
+            print("no sketch ID given")
+
 
 
 def sketches(args):
@@ -356,7 +379,7 @@ if __name__ == "__main__":
     parser_sketch = subparser.add_parser('sketch', description="Interact with a particular sketch")
     parser_sketch.add_argument('-sid', '--sketchid', help='output result value', action='store', required=False)
     parser_sketch.add_argument('-o', '--option', help='output result value', action='store', required=False,
-                                     choices=['list','search','create','addevent'],
+                                     choices=['list','search','create','addevent','explore'],
                                      default='list')
     parser_sketch.add_argument('-st', '--searchterm', help='output result value', action='store', required=False)
     parser_sketch.add_argument('-n', '--name', help='name of the (potential) sketch', action='store', required=False)
