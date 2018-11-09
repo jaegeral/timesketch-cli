@@ -3,8 +3,8 @@ import configparser
 import logging
 import argparse
 import datetime
-
-
+from prettytable import PrettyTable
+import sys
 # Hack to disable warning...
 import urllib3
 
@@ -27,8 +27,8 @@ logger.addHandler(fh)
 
 
 config = configparser.ConfigParser()
-config.read("config_demo.config")
-# config.read("config_prod.config")
+#config.read("config_demo.config")
+config.read("config_local.config")
 
 TIMESKETCH_BASEURL = config.get('TIMESKETCH', 'BASEURL')
 TIMESKETCH_USERNAME = config.get('TIMESKETCH', 'USERNAME')
@@ -42,12 +42,16 @@ def login():
 
     :return: api_client object with a valid session
     """
-    logger.debug("Login attampt to " + TIMESKETCH_BASEURL)
-    c_api_client = TimesketchApi(TIMESKETCH_BASEURL, username=TIMESKETCH_USERNAME, password=TIMESKETCH_PASSWORD)
-    logger.debug("Login attampt status")
+    try:
+        logger.debug("Login attampt to " + TIMESKETCH_BASEURL)
+        c_api_client = TimesketchApi(TIMESKETCH_BASEURL, username=TIMESKETCH_USERNAME, password=TIMESKETCH_PASSWORD)
+        logger.debug("Login attampt status")
 
-    return c_api_client
-
+        return c_api_client
+    except:
+        logger.error("Error while login %s",str(sys.exc_info()[0]))
+        print("Error while login"+str(sys.exc_info()[0]))
+        sys.exit()
 
 def list_sketches(a_api_client=None):
     """
@@ -58,12 +62,22 @@ def list_sketches(a_api_client=None):
         a_api_client = login()
 
     sketches = a_api_client.list_sketches()
-    from prettytable import PrettyTable
     t = PrettyTable(['id', 'Name'])
     for current_sketch in sketches:
         t.add_row([current_sketch.id, current_sketch.name])
     print t
 
+def list_timelines_in_sketch(a_api_client=None,sketch_id=None):
+    if a_api_client is None:
+        a_api_client = login()
+
+    sketch = a_api_client.get_sketch(int(sketch_id))
+    timelines = sketch.list_timelines()
+
+    t = PrettyTable(['id', 'Name'])
+    for current_timeline in timelines:
+        t.add_row([current_timeline.id, current_timeline.name])
+    print t
 
 def get_sketch(a_api_client=None, a_sketch_id=None):
     """
@@ -81,7 +95,18 @@ def get_sketch(a_api_client=None, a_sketch_id=None):
 
 
 def search_in_sketch(a_api_client=None, a_sketch=None, a_search_term=None):
-    a_sketch.search(a_search_term)
+    """
+
+    :param a_api_client:
+    :param a_sketch: not a sketch ID
+    :param a_search_term:
+    """
+    if isinstance(a_sketch, int):
+        # it is most likely the sketch id, not the sketch instance
+        a_sketch = a_api_client.get_sketch(a_sketch)
+
+    #a_sketch.search(a_search_term)
+    #a_sketch.explore()
     logger.error("Not yet implemented")
 
 
@@ -90,14 +115,55 @@ def console():
     raise NotImplementedError
 
 
-def add_label_to_event():
+def add_comment_to_event(c_api_client, a_sketch_id, a_event_id, a_index_id, a_comment_text):
     """
-    TODO Implement
+    Adds a comment to a single event
+    :param c_api_client:
+    :param a_sketch_id:
+    :param a_event_id:
+    :param a_index_id:
+    :param a_comment_text:
     """
-    c_api_client = TimesketchApi(TIMESKETCH_BASEURL, username=TIMESKETCH_USERNAME, password=TIMESKETCH_PASSWORD)
-    current_sketch = c_api_client.get_sketch(3)
-    return_value = current_sketch.label_events(145, "aaa")
-    logger.debug("test")
+    current_sketch = c_api_client.get_sketch(a_sketch_id)
+    current_sketch.comment_event(event_id=a_event_id, index=a_index_id, comment_text=a_comment_text)
+
+
+def add_label_to_event(c_api_client,a_sketch_id,a_event_id,a_index_id,a_label_text):
+    """
+    Add a label to a single event
+
+    :param c_api_client:
+    :param a_sketch_id:
+    :param a_event_id:
+    :param a_index_id:
+    :param a_label_text:
+    """
+    current_sketch = c_api_client.get_sketch(a_sketch_id)
+    current_sketch.label_event(event_id=a_event_id, index=a_index_id, label_text=a_label_text)
+
+
+def explore_sketch(api_client, a_sketchid,a_searchterm):
+    """
+    Searches for a given string in a fiven sketch and prints the output as a table
+    :param api_client:
+    :param a_sketchid:
+    :param a_searchterm:
+    """
+    current_sketch = api_client.get_sketch(int(a_sketchid))
+    print("Searching for: '"+a_searchterm+"' in sketch '"+current_sketch.name+"'")
+
+    search_results = current_sketch.explore(a_searchterm)
+
+    if api_client is None:
+        api_client = login()
+
+    t = PrettyTable(['datetime', 'message','labels','_id', "_index"])
+    for current_sketch in search_results['objects']:
+        source = current_sketch.get('_source')
+        t.add_row([source.get('datetime'), source.get('message'), ('[%s]' % ', '.join(map(str, source.get('label')))),current_sketch.get("_id"), current_sketch.get("_index")])
+    print t
+
+    logger.debug(search_results)
 
 
 def get_date(a_date):
@@ -191,6 +257,7 @@ def interact_add_events(a_api_client, a_sketch_id):
         element_id = first_element.get("id")
         print("Event added, ID: "+str(element_id)+" Date:" + timestamp +" timestamp desc "+str(timestamp_desc)+" message"+message)
         logger.debug("Event added, ID: "+str(element_id)+" Date:" + timestamp +" timestamp desc "+str(timestamp_desc)+" message"+message)
+        logger.debug(objects[0])
 
         again_input_value = raw_input("Add another event? (y/n)")
 
@@ -219,38 +286,109 @@ def create_sketch(a_api_client=None, a_sketch_name=None):
     print("Created sketch "+a_sketch_name+" URL :"+TIMESKETCH_BASEURL+"/sketch/"+str(element_id)+"/")
 
 
+def sketch(c_args):
+    """
+    Interaction with a dedicated sketch
+    :param c_args:
+    """
+    c_api_client = login()
+    #print(c_args)
+    if c_args.option == 'list':
+        if c_args.sketchid is not None:
+            list_timelines_in_sketch(c_api_client, c_args.sketchid)
+    elif c_args.option == 'search':
+        if c_args.searchterm is not None:
+            if c_args.sketchid is not None:
+                print(c_args.searchterm)
+                c_sketch = c_api_client.get_sketch(int(c_args.sketchid))
+                # not yet implemented
+                search_result = search_in_sketch(c_api_client,a_sketch=c_sketch,a_search_term=c_args.searchterm)
+            else:
+                logger.error("no sketch ID given")
+                print("no sketch ID given")
+        else:
+            logger.error("no searchterm given")
+            print("no searchterm given")
+    elif c_args.option == 'create':
+        create_sketch(c_api_client,a_sketch_name=c_args.name)
+    elif c_args.option == 'addevent':
+        if c_args.sketchid is not None:
+            interact_add_events(c_api_client,a_sketch_id=int(c_args.sketchid))
+        else:
+            logger.error("no sketch ID given")
+            print("no sketch ID given")
+
+
+def sketches(args):
+    """
+    Here is a lot of work to do in order to get more functionality
+
+    :param args:
+    """
+    api_client = login()
+    print(args)
+    list_sketches(api_client)
+
+
+def searchindices(args):
+    """
+
+    :param args: provide all args given in the command line
+    """
+    api_client = login()
+    search_results = api_client.list_searchindices()
+    t = PrettyTable(['id', "Searchindex name"])
+    for current_element in search_results:
+        t.add_row([current_element.id, current_element.name])
+    print t
+
+    logger.debug(search_results)
+
+
 if __name__ == "__main__":
 
     logo()
 
     parser = argparse.ArgumentParser()
+    subparser = parser.add_subparsers()
 
-    parser.add_argument("-v", "--verbose", help="increase output verbosity",
-                        action="store_true")
-    parser.add_argument("-ls", "--list_sketches", help="list sketches",
-                        action="store_true")
-    parser.add_argument("-ae", "--add_events", help="add events to a sketch", action="store_true")
-    parser.add_argument("-cs", "--create_sketch", help="create a sketch", action="store_true")
-    parser.add_argument("-name", "--name",nargs='?', help="name if needed")
+    # sketch
+    parser_sketch = subparser.add_parser('sketch', description="Interact with a particular sketch")
+    parser_sketch.add_argument('-sid', '--sketchid', help='output result value', action='store', required=False)
+    parser_sketch.add_argument('-o', '--option', help='output result value', action='store', required=False,
+                                     choices=['list','search','create','addevent'],
+                                     default='list')
+    parser_sketch.add_argument('-st', '--searchterm', help='output result value', action='store', required=False)
+    parser_sketch.add_argument('-n', '--name', help='name of the (potential) sketch', action='store', required=False)
+
+    parser_sketch.set_defaults(func=sketch)
+
+    # sketches
+    parser_sketches = subparser.add_parser('sketches', description="Interact with sketches")
+    parser_sketches.add_argument('-o', '--option', help='output result value', action='store', required=False,
+                                     choices=['list'],
+                                     default='list')
+    parser_sketches.set_defaults(func=sketches)
+
+    # modify event
+    parser_modify_event = subparser.add_parser('modify_event', description="Interact with an event")
+    parser_modify_event.add_argument('-o', '--option', help='output result value', action='store', required=False,
+                                 choices=['addComment', 'addLabel','display'],
+                                 default='list')
+    parser_modify_event.add_argument("-eid","--event_id",nargs='?', help="event_id")
+    parser_modify_event.add_argument("-iid", "--index_id", nargs='?', help="index_id")
+    #parser_sketches.set_defaults(func=event)
+
+    # modify event
+    parser_searchindices = subparser.add_parser('searchindices', description="Interact with an event")
+    parser_searchindices.add_argument('-o', '--option', help='output result value', action='store', required=False,
+                                     choices=['list'],
+                                     default='list')
+    parser_searchindices.set_defaults(func=searchindices)
 
     args = parser.parse_args()
 
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
+    args.func(args)
 
-    if args.list_sketches:
-        api_client = login()
-        list_sketches(api_client)
-    elif args.add_events:
-        api_client = login()
-        sketch = None
-        interact_add_events(api_client, sketch)
-    elif args.create_sketch:
-        api_client = login()
-        if args.name is None:
-            create_sketch(a_api_client=api_client, a_sketch_name=None)
-        else:
-            create_sketch(a_api_client=api_client, a_sketch_name=args.name)
 
-    else:
-        print("no command given")
+

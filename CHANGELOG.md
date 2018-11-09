@@ -1,3 +1,10 @@
+# 2018-11-09
+
+* version 0.3
+* rewirtten argparse
+* ability to list searchindice
+
+
 # 2018-10-31
 
 * migrated to python3
