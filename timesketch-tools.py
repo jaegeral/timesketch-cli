@@ -67,7 +67,7 @@ def list_sketches(a_api_client=None):
     t = PrettyTable(['id', 'Name'])
     for current_sketch in sketches:
         t.add_row([current_sketch.id, current_sketch.name])
-    print t
+    print(t)
 
 def list_timelines_in_sketch(a_api_client=None,sketch_id=None):
     if a_api_client is None:
@@ -79,7 +79,7 @@ def list_timelines_in_sketch(a_api_client=None,sketch_id=None):
     t = PrettyTable(['id', 'Name'])
     for current_timeline in timelines:
         t.add_row([current_timeline.id, current_timeline.name])
-    print t
+    print(t)
 
 def get_sketch(a_api_client=None, a_sketch_id=None):
     """
@@ -143,7 +143,7 @@ def add_label_to_event(c_api_client,a_sketch_id,a_event_id,a_index_id,a_label_te
 
     if (a_label_text is None) or (len(a_label_text) == 0):
         explore_pytaxonomies()
-        a_label_text = raw_input("Give label")
+        a_label_text = input("Give label")
 
 
     current_sketch = c_api_client.get_sketch(a_sketch_id)
@@ -164,7 +164,7 @@ def explore_pytaxonomies():
     from pytaxonomies import Taxonomies
 
     taxonomies = Taxonomies()
-    again_user_input = raw_input("do you want to search within the pyTaxonomies? (y/n) ")
+    again_user_input = input("do you want to search within the pyTaxonomies? (y/n) ")
     if again_user_input.lower() == 'y':
         again = True
     else:
@@ -172,18 +172,28 @@ def explore_pytaxonomies():
 
     while again:
         try:
-            char = raw_input("Term you want to search for e.g. PAP, TLP, ...")  # read 1 character from stdin
+            char = input("Term you want to search for e.g. PAP, TLP, ...")  # read 1 character from stdin
             # try autocomplete
             print("Suggestions")
             if (char is "") or (len(char) == 0):
                 search_results = taxonomies.keys()
             else:
-                search_results = taxonomies.get(char).machinetags_expanded()
-            for item in search_results:
-                print(item)
+                #search_results = taxonomies.get(char).machinetags_expanded()
+                all = taxonomies.all_machinetags()
+
+                resultarray = []
+
+                for iterm in all:
+                    for item2 in iterm:
+                        if char in item2.lower():  # lower to be able to find PAP if you look for p
+                            resultarray.append(item2)
+
+                for resultitem in resultarray:
+                    print(resultitem)
+
 
             # print(search_results)
-            again_user_input = raw_input("again?")
+            again_user_input = input("again?")
             if again_user_input.lower() == 'n':
                 again = False
             else:
@@ -211,7 +221,7 @@ def explore_sketch(api_client, a_sketchid,a_searchterm):
     for current_sketch in search_results['objects']:
         source = current_sketch.get('_source')
         t.add_row([source.get('datetime'), source.get('message'), ('[%s]' % ', '.join(map(str, source.get('label')))),current_sketch.get("_id"), current_sketch.get("_index")])
-    print t
+    print(t)
 
     logger.debug(search_results)
 
@@ -236,7 +246,7 @@ def get_date(a_date):
             pass
 
     logger.error("Given timestamp %s does not match the Timesketch formats", a_date)
-    print "Sorry - Date %s is not in expected format - Try again" % (a_date)
+    print("Sorry - Date %s is not in expected format - Try again" % (a_date))
     return False
 
 
@@ -255,7 +265,7 @@ def logo():
 
 
 def again(user_input):
-    # raw_input returns the empty string for "enter"
+    # input returns the empty string for "enter"
     yes = {'yes', 'y', 'ye', ''}
     no = {'no', 'n'}
 
@@ -292,16 +302,16 @@ def interact_add_events(a_api_client, a_sketch_id):
         timestamp = False
 
         while timestamp is False:
-            timestamp = raw_input(
+            timestamp = input(
                 ("Timestamp (use Format: YYYY-mm-ddTHH:MM:SS+00:00 2018-01-15T10:45:50+00:00) use c for current time "))
 
             if timestamp == 'c':
                 timestamp = '{0:%Y-%m-%dT%H:%M:%S+00:00}'.format(datetime.datetime.now())
             timestamp = get_date(timestamp)
 
-        timestamp_desc = raw_input("timestamp_desc ")
+        timestamp_desc = input("timestamp_desc ")
 
-        message = raw_input("message ")
+        message = input("message ")
 
         return_value = current_sketch.add_event(timestamp=timestamp, message=message, timestamp_desc=timestamp_desc)
         objects = return_value.get("objects")
@@ -311,7 +321,7 @@ def interact_add_events(a_api_client, a_sketch_id):
         logger.debug("Event added, ID: "+str(element_id)+" Date:" + timestamp +" timestamp desc "+str(timestamp_desc)+" message"+message)
         logger.debug(objects[0])
 
-        again_input_value = raw_input("Add another event? (y/n)")
+        again_input_value = input("Add another event? (y/n)")
 
         do_again = again(again_input_value)
 
@@ -327,9 +337,9 @@ def create_sketch(a_api_client=None, a_sketch_name=None):
     if a_api_client is None:
         a_api_client = login()
     if a_sketch_name is None:
-        a_sketch_name = raw_input("What is the name of your new sketch? ")
+        a_sketch_name = input("What is the name of your new sketch? ")
 
-    a_sketch_description = raw_input("What is the description of your new sketch? ")
+    a_sketch_description = input("What is the description of your new sketch? ")
 
     return_value = a_api_client.create_sketch(a_sketch_name, description=a_sketch_description)
 
@@ -347,7 +357,7 @@ def print_timelines(c_timelines):
         source = current_sketch.get('_source')
         t.add_row([source.get('datetime'), source.get('timestamp_desc'), source.get('message'), ('[%s]' % ', '.join(map(str, source.get('label')))),
                    current_sketch.get("_id"), current_sketch.get("_index")])
-    print t
+    print(t)
 
 
 def sketch(c_args):
@@ -413,7 +423,7 @@ def searchindices(args):
     t = PrettyTable(['id', "Searchindex name"])
     for current_element in search_results:
         t.add_row([current_element.id, current_element.name])
-    print t
+    print(t)
 
     logger.debug(search_results)
 
@@ -433,7 +443,7 @@ def event(c_args):
     api_client = login()
 
     if args.sketchid is None:
-        args.sketchid = raw_input("please provide sketch id")
+        args.sketchid = input("please provide sketch id")
 
     if c_args.option == 'display':
         current_sketch = api_client.get_sketch(int(c_args.sketchid))
@@ -443,11 +453,11 @@ def event(c_args):
         return
 
     if args.event_id is None:
-        args.event_id = raw_input("please provide event_id")
+        args.event_id = input("please provide event_id")
     if args.index_id is None:
-        args.index_id = raw_input("please provide index_id")
+        args.index_id = input("please provide index_id")
     if args.text is None:
-        args.text = raw_input("Please provide your Text")
+        args.text = input("Please provide your Text")
 
     if c_args.option == 'addComment':
         add_comment_to_event(c_api_client=api_client, a_sketch_id=int(args.sketchid), a_event_id=args.event_id,
@@ -461,11 +471,11 @@ def upload(args):
     api_client = login()
 
     if args.sketchid is None:
-        args.sketchid = raw_input("please provide sketch id")
+        args.sketchid = input("please provide sketch id")
 
     if args.path is None:
         logger.error("No filepath given")
-        args.path = raw_input("please provide filepath to your file to upload ")
+        args.path = input("please provide filepath to your file to upload ")
 
     if args.option == 'csv':
         current_sketch = api_client.get_sketch(int(args.sketchid))

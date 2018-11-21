@@ -5,6 +5,7 @@
 * datetime tools included
 * include pytaxonomie "browser"
 ** adjust requirement file
+* python3 ready
 
 # 2018-11-09
 

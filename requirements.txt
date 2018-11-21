@@ -3,6 +3,6 @@ logging
 configparser
 argparse
 prettytable
-beautifulsoup4
+bs4
 urllib3
 git+https://github.com/MISP/PyTaxonomies
