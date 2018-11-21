@@ -1,3 +1,9 @@
+# 2018-11-21
+
+* version 0.4
+    * bump of version in config
+* datetime tools included
+
 # 2018-11-09
 
 * version 0.3

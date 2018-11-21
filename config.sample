@@ -3,4 +3,4 @@ BASEURL = https://demo.timesketch.org
 USERNAME = demo
 PASSWORD = demo
 HTTPS_VERIFY=False
-version = 0.3
+version = 0.4
