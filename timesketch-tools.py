@@ -7,6 +7,8 @@ from prettytable import PrettyTable
 import sys
 # Hack to disable warning...
 import urllib3
+from pytaxonomies import Taxonomies
+
 
 urllib3.disable_warnings(urllib3.exceptions.SecurityWarning)
 
@@ -15,7 +17,7 @@ logger = logging.getLogger('timesketch')
 logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
-fh = logging.FileHandler('spam.log')
+fh = logging.FileHandler('debug.log')
 fh.setLevel(logging.DEBUG)
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(funcName)s() - %(message)s')
@@ -138,8 +140,56 @@ def add_label_to_event(c_api_client,a_sketch_id,a_event_id,a_index_id,a_label_te
     :param a_index_id:
     :param a_label_text:
     """
+
+    if (a_label_text is None) or (len(a_label_text) == 0):
+        explore_pytaxonomies()
+        a_label_text = raw_input("Give label")
+
+
     current_sketch = c_api_client.get_sketch(a_sketch_id)
     current_sketch.label_event(event_id=a_event_id, index=a_index_id, label_text=a_label_text)
+
+def explore_pytaxonomies():
+    """
+    the tool should go in an endless loop asking for user input with auto complete until the right taxonomy is choosen
+    example:
+    PAP<enter>
+    PAP:AMBER
+     PAP:WHITE
+     PAP:GREEN
+     PAP:RED
+     PAP:RED<enter> --> finished
+    https://github.com/MISP/PyTaxonomies
+    """
+    from pytaxonomies import Taxonomies
+
+    taxonomies = Taxonomies()
+    again_user_input = raw_input("do you want to search within the pyTaxonomies? (y/n) ")
+    if again_user_input.lower() == 'y':
+        again = True
+    else:
+        again = False
+
+    while again:
+        try:
+            char = raw_input("Term you want to search for e.g. PAP, TLP, ...")  # read 1 character from stdin
+            # try autocomplete
+            print("Suggestions")
+            if (char is "") or (len(char) == 0):
+                search_results = taxonomies.keys()
+            else:
+                search_results = taxonomies.get(char).machinetags_expanded()
+            for item in search_results:
+                print(item)
+
+            # print(search_results)
+            again_user_input = raw_input("again?")
+            if again_user_input.lower() == 'n':
+                again = False
+            else:
+                again = True
+        except AttributeError as e:
+            print("Seems we did not find the value "+str(e))
 
 
 def explore_sketch(api_client, a_sketchid,a_searchterm):
@@ -407,6 +457,19 @@ def event(c_args):
                            a_index_id=args.index_id,a_label_text=args.text)
     else:
         print("no command given")
+def upload(args):
+    api_client = login()
+
+    if args.sketchid is None:
+        args.sketchid = raw_input("please provide sketch id")
+
+    if args.path is None:
+        logger.error("No filepath given")
+        args.path = raw_input("please provide filepath to your file to upload ")
+
+    if args.option == 'csv':
+        current_sketch = api_client.get_sketch(int(args.sketchid))
+        current_sketch.upload(timeline_name=args.name,file_path=args.path)
 
 
 if __name__ == "__main__":
@@ -451,6 +514,19 @@ if __name__ == "__main__":
                                      choices=['list'],
                                      default='list')
     parser_searchindices.set_defaults(func=searchindices)
+
+    # upload
+    parser_sketch = subparser.add_parser('upload', description="Upload something")
+    parser_sketch.add_argument('-sid', '--sketchid', help='output result value', action='store', required=False)
+    parser_sketch.add_argument('-o', '--option', help='output result value', action='store', required=False,
+                               choices=['csv'],
+                               default='csv')
+    parser_sketch.add_argument('-n', '--name', help='name of the (potential) sketch', action='store', required=False)
+    parser_sketch.add_argument('-p', '--path', help='path to the file', action='store', required=False)
+
+    parser_sketch.set_defaults(func=upload)
+
+
 
     args = parser.parse_args()
 

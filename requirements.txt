@@ -5,3 +5,4 @@ argparse
 prettytable
 beautifulsoup4
 urllib3
+git+https://github.com/MISP/PyTaxonomies

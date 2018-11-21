@@ -185,6 +185,45 @@ timesketch-tools.py modify_event -o display --event_id AWQw5_NpeBLZMUY_lr62 --sk
 +---------------------+-------------------------------+--------------------------------------------------------------------+---------------------------------------+----------------------+----------------------------------+
 ```
 
+## Add a tag from pyTaxonomie to Timesketch
+
+```
+python3 timesketch-tools.py modify_event -o addLabel --event_id AWc19oPsqgYnbgC2IIEH --index_id 1f9d42fd839a4324b0c4dcc1d47b55d2
+     
+         _______               __       __      __ 
+        /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
+         / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.4
+
+            
+please provide sketch id1
+Please provide your Text
+do you want to search within the pyTaxonomies? (y/n) y
+Term you want to search for e.g. PAP, TLP, ...tlp
+Suggestions
+tlp:amber
+tlp:white
+tlp:green
+tlp:ex:chr
+tlp:red
+again?y
+Term you want to search for e.g. PAP, TLP, ...TLP
+Suggestions
+Seems we did not find the value 'NoneType' object has no attribute 'machinetags_expanded'
+Term you want to search for e.g. PAP, TLP, ...pap
+Suggestions
+Seems we did not find the value 'NoneType' object has no attribute 'machinetags_expanded'
+Term you want to search for e.g. PAP, TLP, ...PAP
+Suggestions
+PAP:AMBER
+PAP:WHITE
+PAP:GREEN
+PAP:RED
+again?n
+Give labelPAP:WHITE
+
+```
+
 
 # Open issues
 

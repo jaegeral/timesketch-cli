@@ -3,6 +3,8 @@
 * version 0.4
     * bump of version in config
 * datetime tools included
+* include pytaxonomie "browser"
+** adjust requirement file
 
 # 2018-11-09
 
