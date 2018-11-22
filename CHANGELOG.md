@@ -1,6 +1,7 @@
 # 2018-11-22
 
 * fixed typo in Readme
+* added sample_files
 
 # 2018-11-21
 
