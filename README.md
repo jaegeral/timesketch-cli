@@ -1,9 +1,9 @@
 # timesketch-tools
 A dedicated repo to interact with the API of Timesketch
 
-This is an unofficial tool and is iin no way supported by Google / Timesketch team.
+This is an unofficial tool and is in no way supported by Google / Timesketch team.
 
-Use on your own risk, might brake stuff...
+Use on your own risk, might break stuff...
 
 # Installation
 

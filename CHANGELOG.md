@@ -1,3 +1,7 @@
+# 2018-11-22
+
+* fixed typo in Readme
+
 # 2018-11-21
 
 * version 0.4
