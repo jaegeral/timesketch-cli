@@ -224,6 +224,10 @@ Give labelPAP:WHITE
 
 ```
 
+# timesketch-tools vs tsctl
+
+tsctl is the tool used locally on the timesketch machine.
+timesketch-tools is made to be used with the API from any machine that has network connection to the timesketch instance.
 
 # Open issues
 
