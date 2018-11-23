@@ -18,24 +18,23 @@ to add some more functionality (but will be removed as soon as every PR is merge
 # Usage
 
 ```
-timesketch-tools.py --help
+timesketch-tools.py -h
      
          _______               __       __      __ 
         /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
          / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
-        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.1
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.4
 
             
-usage: timesketch-tools.py [-h] [-v] [-ls] [-ae] [-cs] [-name [NAME]]
+usage: timesketch-tools.py [-h]
+                           {sketch,sketches,modify_event,searchindices,upload}
+                           ...
+
+positional arguments:
+  {sketch,sketches,modify_event,searchindices,upload}
 
 optional arguments:
   -h, --help            show this help message and exit
-  -v, --verbose         increase output verbosity
-  -ls, --list_sketches  list sketches
-  -ae, --add_events     add events to a sketch
-  -cs, --create_sketch  create a sketch
-  -name [NAME], --name [NAME]
-                        name if needed
 
 ```
 
