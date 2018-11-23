@@ -1,6 +1,7 @@
 # 2018-11-23
 
 * tsctl vs. timesketch-tools
+* fixed a small issue with beatifulsoup
 
 # 2018-11-22
 

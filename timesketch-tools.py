@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from timesketch_api_client.client import TimesketchApi
 import configparser
 import logging
