@@ -223,6 +223,30 @@ Give labelPAP:WHITE
 
 ```
 
+## Search in a sketch
+
+The searchterm can be used with "*" in front or back to have every character.
+The search is not case sensitive.
+
+````
+timesketch-tools.py sketch -o search -sid 1 -st *win*
+     
+         _______               __       __      __ 
+        /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
+         / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.4
+
+            
+Searching for: '*win*' in sketch 'aaaUntitled sketch'
++---------------------------+----------------------------------------------------------+--------+----------------------+----------------------------------+
+|          datetime         |                         message                          | labels |         _id          |              _index              |
++---------------------------+----------------------------------------------------------+--------+----------------------+----------------------------------+
+| 2018-10-15T18:52:06+00:00 |                           win                            |   []   | AWc__lO_IUecPZLawtVa | 524f5e7b530a16eba408968369e5a716 |
+| 2018-10-15T18:52:06+00:00 | Windows Domain admin credentials gone away to the hacker |   []   | AWdAAExzIUecPZLawtVb | 524f5e7b530a16eba408968369e5a716 |
++---------------------------+----------------------------------------------------------+--------+----------------------+----------------------------------+
+
+````
+
 # timesketch-tools vs tsctl
 
 tsctl is the tool used locally on the timesketch machine.

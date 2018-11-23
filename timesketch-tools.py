@@ -109,9 +109,12 @@ def search_in_sketch(a_api_client=None, a_sketch=None, a_search_term=None):
         # it is most likely the sketch id, not the sketch instance
         a_sketch = a_api_client.get_sketch(a_sketch)
 
+        #explore_sketch()
+    explore_sketch(api_client=a_api_client,a_sketchid=a_sketch.id,a_searchterm=a_search_term)
+
     #a_sketch.search(a_search_term)
     #a_sketch.explore()
-    logger.error("Not yet implemented")
+    #logger.error("Not yet implemented")
 
 
 def console():
@@ -375,7 +378,6 @@ def sketch(c_args):
     elif c_args.option == 'search':
         if c_args.searchterm is not None:
             if c_args.sketchid is not None:
-                print(c_args.searchterm)
                 c_sketch = c_api_client.get_sketch(int(c_args.sketchid))
                 # not yet implemented
                 search_result = search_in_sketch(c_api_client,a_sketch=c_sketch,a_search_term=c_args.searchterm)
