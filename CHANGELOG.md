@@ -4,6 +4,7 @@
 * fixed a small issue with beatifulsoup
 * update README.md
 * introduce sketch search
+* write down how to test it
 
 # 2018-11-22
 

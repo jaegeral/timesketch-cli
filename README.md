@@ -252,10 +252,42 @@ Searching for: '*win*' in sketch 'aaaUntitled sketch'
 tsctl is the tool used locally on the timesketch machine.
 timesketch-tools is made to be used with the API from any machine that has network connection to the timesketch instance.
 
+# Test / play with timesketch-tools
+
+If you want to play or test with timesketch-tools it is recommended to create a venv:
+````
+pip3 install virtualenv
+git clone https://github.com/deralexxx/timesketch-tools
+cd timesketch-tools
+python3 -m venv venv
+source venv/bin/activate
+(venv)#python3 timesketch-tools -h
+````
+
+You can either interact with the demo site (demo.timesketch.org)
+By using the config_demo.config file.
+
+Other option is to make use of the vagrant image of timesketch:
+https://github.com/google/timesketch/tree/master/vagrant
+Start the vagrant image and then make:
+````
+cp config.sample config_local.config
+[TIMESKETCH]
+BASEURL = http://127.0.0.1
+USERNAME = spock
+PASSWORD = spock
+HTTPS_VERIFY = False
+version = 0.4
+````
+
+And adjust the to be used config in the timesketch-tools.py file.
+
+Happy playing
+
+
 # Open issues
 
 * add Labels to events
-* search in Sketches
 * create sketches
 * get the new api_client version merged
 
