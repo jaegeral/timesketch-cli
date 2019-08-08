@@ -1,4 +1,4 @@
-# timesketch-tools
+# timesketch-cli
 A dedicated repo to interact with the API of Timesketch
 
 This is an unofficial tool and is in no way supported by Google / Timesketch team.
