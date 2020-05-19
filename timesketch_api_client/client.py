@@ -12,15 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Timesketch API client."""
+from __future__ import unicode_literals
 
+import os
 import json
+import logging
 import uuid
-import BeautifulSoup
+
+# pylint: disable=wrong-import-order
+import bs4
 import requests
-
+# pylint: disable=redefined-builtin
 from requests.exceptions import ConnectionError
+import webbrowser
 
-from .definitions import HTTP_STATUS_CODE_20X
+# pylint: disable-msg=import-error
+from google_auth_oauthlib import flow as googleauth_flow
+import google.auth.transport.requests
+import pandas
+
+from . import crypto
+from . import definitions
+from . import error
+from . import index
+from . import sketch
+
+
+logger = logging.getLogger('client_api')
 
 
 class TimesketchApi(object):
@@ -31,12 +49,27 @@ class TimesketchApi(object):
         session: Authenticated HTTP session.
     """
 
+    DEFAULT_OAUTH_SCOPE = [
+        'https://www.googleapis.com/auth/userinfo.email',
+        'openid',
+        'https://www.googleapis.com/auth/userinfo.profile'
+    ]
+
+    DEFAULT_OAUTH_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+    DEFAULT_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token'
+    DEFAULT_OAUTH_PROVIDER_URL = 'https://www.googleapis.com/oauth2/v1/certs'
+    DEFAULT_OAUTH_OOB_URL = 'urn:ietf:wg:oauth:2.0:oob'
+    DEFAULT_OAUTH_API_CALLBACK = '/login/api_callback/'
+
     def __init__(self,
                  host_uri,
                  username,
-                 password,
+                 password='',
                  verify=True,
-                 auth_mode=u'timesketch'):
+                 client_id='',
+                 client_secret='',
+                 auth_mode='timesketch',
+                 create_session=True):
         """Initializes the TimesketchApi object.
 
         Args:
@@ -44,18 +77,46 @@ class TimesketchApi(object):
             username: User username.
             password: User password.
             verify: Verify server SSL certificate.
+            client_id: The client ID if OAUTH auth is used.
+            client_secret: The OAUTH client secret if OAUTH is used.
             auth_mode: The authentication mode to use. Defaults to 'timesketch'
-                Supported values are 'timesketch' (Timesketch login form) and
-                'http-basic' (HTTP Basic authentication).
+                Supported values are 'timesketch' (Timesketch login form),
+                'http-basic' (HTTP Basic authentication) and oauth.
+            create_session: Boolean indicating whether the client object
+                should create a session object. If set to False the
+                function "set_session" needs to be called before proceeding.
+
+        Raises:
+            ConnectionError: If the Timesketch server is unreachable.
+            RuntimeError: If the client is unable to authenticate to the
+                backend.
         """
         self._host_uri = host_uri
-        self.api_root = u'{0:s}/api/v1'.format(host_uri)
+        self.api_root = '{0:s}/api/v1'.format(host_uri)
+        self.credentials = None
+        self._flow = None
+
+        if not create_session:
+            self.session = None
+            return
+
         try:
             self.session = self._create_session(
-                username, password, verify=verify, auth_mode=auth_mode)
-            
+                username, password, verify=verify, client_id=client_id,
+                client_secret=client_secret, auth_mode=auth_mode)
         except ConnectionError:
-            raise ConnectionError(u'Timesketch server unreachable')
+            raise ConnectionError('Timesketch server unreachable')
+        except RuntimeError as e:
+            raise RuntimeError(
+                'Unable to connect to server, with error: {0!s}'.format(e))
+
+    def set_credentials(self, credential_object):
+        """Sets the credential object."""
+        self.credentials = credential_object
+
+    def set_session(self, session_object):
+        """Sets the session object."""
+        self.session = session_object
 
     def _authenticate_session(self, session, username, password):
         """Post username/password to authenticate the HTTP seesion.
@@ -66,8 +127,8 @@ class TimesketchApi(object):
             password: User password.
         """
         # Do a POST to the login handler to set up the session cookies
-        data = {u'username': username, u'password': password}
-        session.post(u'{0:s}/login/'.format(self._host_uri), data=data)
+        data = {'username': username, 'password': password}
+        session.post('{0:s}/login/'.format(self._host_uri), data=data)
 
     def _set_csrf_token(self, session):
         """Retrieve CSRF token from the server and append to HTTP headers.
@@ -77,37 +138,156 @@ class TimesketchApi(object):
         """
         # Scrape the CSRF token from the response
         response = session.get(self._host_uri)
-        soup = BeautifulSoup.BeautifulSoup(response.text)
-        csrf_token = soup.find(id=u'csrf_token').get(u'value')
+        soup = bs4.BeautifulSoup(response.text, features='html.parser')
+
+        tag = soup.find(id='csrf_token')
+        csrf_token = None
+        if tag:
+            csrf_token = tag.get('value')
+        else:
+            tag = soup.find('meta', attrs={'name': 'csrf-token'})
+            if tag:
+                csrf_token = tag.attrs.get('content')
+
+        if not csrf_token:
+            return
 
         session.headers.update({
-            u'x-csrftoken': csrf_token,
-            u'referer': self._host_uri
+            'x-csrftoken': csrf_token,
+            'referer': self._host_uri
         })
 
-    def _create_session(self, username, password, verify, auth_mode):
+    def _create_oauth_session(
+            self, client_id='', client_secret='', client_secrets_file=None,
+            run_server=True, skip_open=False):
+        """Return an OAuth session.
+
+        Args:
+            client_id: The client ID if OAUTH auth is used.
+            client_secret: The OAUTH client secret if OAUTH is used.
+            client_secrets_file: Path to the JSON file that contains the client
+                secrets, in the client_secrets format.
+            run_server: A boolean, if set to true (default) a web server is
+                run to catch the OAUTH request and response.
+            skip_open: A booelan, if set to True (defaults to False) an
+                authorization URL is printed on the screen to visit. This is
+                only valid if run_server is set to False.
+
+        Return:
+            session: Instance of requests.Session.
+
+        Raises:
+            RuntimeError: if unable to log in to the application.
+        """
+        if client_secrets_file:
+            if not os.path.isfile(client_secrets_file):
+                raise RuntimeError(
+                    'Unable to log in, client secret files does not exist.')
+            flow = googleauth_flow.InstalledAppFlow.from_client_secrets_file(
+                client_secrets_file, scopes=self.DEFAULT_OAUTH_SCOPE,
+                autogenerate_code_verifier=True)
+        else:
+            provider_url = self.DEFAULT_OAUTH_PROVIDER_URL
+            client_config = {
+                'installed': {
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'auth_uri': self.DEFAULT_OAUTH_AUTH_URL,
+                    'token_uri': self.DEFAULT_OAUTH_TOKEN_URL,
+                    'auth_provider_x509_cert_url': provider_url,
+                    'redirect_uris': [self.DEFAULT_OAUTH_OOB_URL],
+                },
+            }
+
+            flow = googleauth_flow.InstalledAppFlow.from_client_config(
+                client_config, self.DEFAULT_OAUTH_SCOPE,
+                autogenerate_code_verifier=True)
+
+            flow.redirect_uri = self.DEFAULT_OAUTH_OOB_URL
+
+        if run_server:
+            _ = flow.run_local_server()
+        else:
+            auth_url, _ = flow.authorization_url(prompt='select_account')
+
+            if skip_open:
+                print('Visit the following URL to authenticate: {0:s}'.format(
+                    auth_url))
+            else:
+                open_browser = input('Open the URL in a browser window? [y/N] ')
+                if open_browser.lower() == 'y' or open_browser.lower() == 'yes':
+                    webbrowser.open(auth_url)
+                else:
+                    print(
+                        'Need to manually visit URL to authenticate: '
+                        '{0:s}'.format(auth_url))
+
+            code = input('Enter the token code: ')
+            _ = flow.fetch_token(code=code)
+
+        session = flow.authorized_session()
+        self._flow = flow
+        self.credentials = crypto.TimesketchOAuthCredentials()
+        self.credentials.credential = flow.credentials
+        return self.authenticate_oauth_session(session)
+
+    def authenticate_oauth_session(self, session):
+        """Authenticate an OAUTH session.
+
+        Args:
+            session: Authorized session object.
+        """
+        # Authenticate to the Timesketch backend.
+        login_callback_url = '{0:s}{1:s}'.format(
+            self._host_uri, self.DEFAULT_OAUTH_API_CALLBACK)
+        params = {
+            'id_token': session.credentials.id_token,
+        }
+        response = session.get(login_callback_url, params=params)
+        if response.status_code not in definitions.HTTP_STATUS_CODE_20X:
+            error.error_message(
+                response, message='Unable to authenticate', error=RuntimeError)
+
+        self._set_csrf_token(session)
+        return session
+
+    def _create_session(
+            self, username, password, verify, client_id, client_secret,
+            auth_mode):
         """Create authenticated HTTP session for server communication.
 
         Args:
             username: User to authenticate as.
             password: User password.
             verify: Verify server SSL certificate.
+            client_id: The client ID if OAUTH auth is used.
+            client_secret: The OAUTH client secret if OAUTH is used.
             auth_mode: The authentication mode to use. Supported values are
-                'timesketch' (Timesketch login form) and 'http-basic'
-                (HTTP Basic authentication).
+                'timesketch' (Timesketch login form), 'http-basic'
+                (HTTP Basic authentication) and oauth.
 
         Returns:
             Instance of requests.Session.
         """
+        if auth_mode == 'oauth':
+            return self._create_oauth_session(client_id, client_secret)
+
+        if auth_mode == 'oauth_local':
+            return self._create_oauth_session(
+                client_id=client_id, client_secret=client_secret,
+                run_server=False, skip_open=True)
+
         session = requests.Session()
-        session.verify = verify  # Depending if SSL cert is verifiable
+
         # If using HTTP Basic auth, add the user/pass to the session
-        if auth_mode == u'http-basic':
+        if auth_mode == 'http-basic':
             session.auth = (username, password)
+
+        session.verify = verify  # Depending if SSL cert is verifiable
 
         # Get and set CSRF token and authenticate the session if appropriate.
         self._set_csrf_token(session)
-        if auth_mode == u'timesketch':
+        if auth_mode == 'timesketch':
             self._authenticate_session(session, username, password)
 
         return session
@@ -121,10 +301,16 @@ class TimesketchApi(object):
         Returns:
             Dictionary with the response data.
         """
-        # TODO: Catch HTTP errors and add descriptive message string.
-        resource_url = u'{0:s}/{1:s}'.format(self.api_root, resource_uri)
+        resource_url = '{0:s}/{1:s}'.format(self.api_root, resource_uri)
         response = self.session.get(resource_url)
-        return response.json()
+        try:
+            return response.json()
+        except json.JSONDecodeError as e:
+            logger.error(
+                'Error fetching resources: [{0:d}] {1!s} {2!s}, error: '
+                '{3!s}'.format(
+                    response.status_code, response.reason, response.text, e))
+        return {}
 
     def create_sketch(self, name, description=None):
         """Create a new sketch.
@@ -139,12 +325,22 @@ class TimesketchApi(object):
         if not description:
             description = name
 
-        resource_url = u'{0:s}/sketches/'.format(self.api_root)
-        form_data = {u'name': name, u'description': description}
+        resource_url = '{0:s}/sketches/'.format(self.api_root)
+        form_data = {'name': name, 'description': description}
         response = self.session.post(resource_url, json=form_data)
         response_dict = response.json()
-        sketch_id = response_dict[u'objects'][0][u'id']
+        sketch_id = response_dict['objects'][0]['id']
         return self.get_sketch(sketch_id)
+
+    def get_oauth_token_status(self):
+        """Return a dict with OAuth token status, if one exists."""
+        if not self.credentials:
+            return {
+                'status': 'No stored credentials.'}
+        return {
+            'expired': self.credentials.credential.expired,
+            'expiry_time': self.credentials.credential.expiry.isoformat(),
+        }
 
     def get_sketch(self, sketch_id):
         """Get a sketch.
@@ -155,20 +351,65 @@ class TimesketchApi(object):
         Returns:
             Instance of a Sketch object.
         """
-        return Sketch(sketch_id, api=self)
+        return sketch.Sketch(sketch_id, api=self)
+
+    def get_aggregator_info(self, name='', as_pandas=False):
+        """Returns information about available aggregators.
+
+        Args:
+            name: String with the name of an aggregator. If the name is not
+                provided, a list with all aggregators is returned.
+            as_pandas: Boolean indicating that the results will be returned
+                as a Pandas DataFrame instead of a list of dicts.
+
+        Returns:
+            A list with dict objects with the information about aggregators,
+            unless as_pandas is set, then the function returns a DataFrame
+            object.
+        """
+        resource_uri = 'aggregation/info/'
+
+        if name:
+            data = {'aggregator': name}
+            resource_url = '{0:s}/{1:s}'.format(self.api_root, resource_uri)
+            response = self.session.post(resource_url, json=data)
+            response_json = response.json()
+        else:
+            response_json = self.fetch_resource_data(resource_uri)
+
+        if not as_pandas:
+            return response_json
+
+        lines = []
+        if isinstance(response_json, dict):
+            response_json = [response_json]
+
+        for line in response_json:
+            line_dict = {
+                'name': line.get('name', 'N/A'),
+                'description': line.get('description', 'N/A'),
+            }
+            for field_index, field in enumerate(line.get('fields', [])):
+                line_dict['field_{0:d}_name'.format(
+                    field_index + 1)] = field.get('name')
+                line_dict['field_{0:d}_description'.format(
+                    field_index + 1)] = field.get('description')
+            lines.append(line_dict)
+
+        return pandas.DataFrame(lines)
 
     def list_sketches(self):
-        """Get list of all open sketches that the user has access to.
+        """Get a list of all open sketches that the user has access to.
 
         Returns:
             List of Sketch objects instances.
         """
         sketches = []
-        response = self.fetch_resource_data(u'sketches/')
-        for sketch in response[u'objects'][0]:
-            sketch_id = sketch[u'id']
-            sketch_name = sketch[u'name']
-            sketch_obj = Sketch(
+        response = self.fetch_resource_data('sketches/')
+        for sketch_dict in response['objects']:
+            sketch_id = sketch_dict['id']
+            sketch_name = sketch_dict['name']
+            sketch_obj = sketch.Sketch(
                 sketch_id=sketch_id, api=self, sketch_name=sketch_name)
             sketches.append(sketch_obj)
         return sketches
@@ -182,7 +423,7 @@ class TimesketchApi(object):
         Returns:
             Instance of a SearchIndex object.
         """
-        return SearchIndex(searchindex_id, api=self)
+        return index.SearchIndex(searchindex_id, api=self)
 
     def get_or_create_searchindex(self,
                                   searchindex_name,
@@ -202,21 +443,61 @@ class TimesketchApi(object):
         if not es_index_name:
             es_index_name = uuid.uuid4().hex
 
-        resource_url = u'{0:s}/searchindices/'.format(self.api_root)
+        resource_url = '{0:s}/searchindices/'.format(self.api_root)
         form_data = {
-            u'searchindex_name': searchindex_name,
-            u'es_index_name': es_index_name,
-            u'public': public
+            'searchindex_name': searchindex_name,
+            'es_index_name': es_index_name,
+            'public': public
         }
         response = self.session.post(resource_url, json=form_data)
 
-        if response.status_code not in HTTP_STATUS_CODE_20X:
-            raise RuntimeError(u'Error creating searchindex')
+        if response.status_code not in definitions.HTTP_STATUS_CODE_20X:
+            error.error_message(
+                response, message='Error creating searchindex',
+                error=RuntimeError)
 
         response_dict = response.json()
-        metadata_dict = response_dict[u'meta']
-        created = metadata_dict.get(u'created', False)
-        searchindex_id = response_dict[u'objects'][0][u'id']
+        metadata_dict = response_dict['meta']
+        created = metadata_dict.get('created', False)
+        searchindex_id = response_dict['objects'][0]['id']
+        return self.get_searchindex(searchindex_id), created
+
+    def merge_searchindex(self,
+                                  searchindex_name,searchindex_name2,
+                                  es_index_name=None,
+                                  es_index_name2=None,
+                                  public=False):
+        """Create a new searchindex.
+
+        Args:
+            searchindex_name: Name of the searchindex in Timesketch.
+            searchindex_name2: Name of the searchindex in Timesketch.
+            es_index_name: Name of the index in Elasticsearch.
+            es_index_name2: Name of the index in Elasticsearch.
+            public: Boolean indicating if the searchindex should be public.
+
+        Returns:
+            Instance of a SearchIndex object and a boolean indicating if the
+            object was created.
+        """
+
+        resource_uri = '_forcemerge'
+        print(searchindex_name)
+        resource_url = '{0:s}/{1:s},{2:s}/{3:s}'.format(self.api_root,searchindex_name,searchindex_name2, resource_uri)
+        print(resource_url)
+
+        form_data = {}
+        response = self.session.post(resource_url, json=form_data)
+        print(response.text)
+        if response.status_code not in definitions.HTTP_STATUS_CODE_20X:
+            error.error_message(
+                response, message='Error creating searchindex',
+                error=RuntimeError)
+
+        response_dict = response.json()
+        metadata_dict = response_dict['meta']
+        created = metadata_dict.get('created', False)
+        searchindex_id = response_dict['objects'][0]['id']
         return self.get_searchindex(searchindex_id), created
 
     def list_searchindices(self):
@@ -226,500 +507,18 @@ class TimesketchApi(object):
             List of SearchIndex object instances.
         """
         indices = []
-        response = self.fetch_resource_data(u'searchindices/')
-        for index in response[u'objects'][0]:
-            index_id = index[u'id']
-            index_name = index[u'name']
-            index_obj = SearchIndex(
+        response = self.fetch_resource_data('searchindices/')
+        for index_dict in response['objects'][0]:
+            index_id = index_dict['id']
+            index_name = index_dict['name']
+            index_obj = index.SearchIndex(
                 searchindex_id=index_id, api=self, searchindex_name=index_name)
             indices.append(index_obj)
         return indices
 
-
-class BaseResource(object):
-    """Base resource object."""
-
-    def __init__(self, api, resource_uri):
-        """Initialize object.
-
-        Args:
-            api: An instance of TimesketchApi object.
-        """
-        self.api = api
-        self.resource_uri = resource_uri
-        self.resource_data = None
-
-    def lazyload_data(self, refresh_cache=False):
-        """Load resource data once and cache the result.
-
-        Args:
-            refresh_cache: Boolean indicating if to update cache.
-
-        Returns:
-            Dictionary with resource data.
-        """
-        if not self.resource_data or refresh_cache:
-            self.resource_data = self.api.fetch_resource_data(self.resource_uri)
-        return self.resource_data
-
-    @property
-    def data(self):
-        """Property to fetch resource data.
-
-        Returns:
-            Dictionary with resource data.
-        """
-        return self.lazyload_data()
-
-
-class Sketch(BaseResource):
-    """Timesketch sketch object.
-
-    A sketch in Timesketch is a collection of one or more timelines. It has
-    access control and its own namespace for things like labels and comments.
-
-    Attributes:
-        id: The ID of the sketch.
-        api: An instance of TimesketchApi object.
-    """
-
-    def __init__(self, sketch_id, api, sketch_name=None):
-        """Initializes the Sketch object.
-
-        Args:
-            sketch_id: Primary key ID of the sketch.
-            api: An instance of TimesketchApi object.
-            sketch_name: Name of the sketch (optional).
-        """
-        self.id = sketch_id
-        self.api = api
-        self._sketch_name = sketch_name
-        self._resource_uri = u'sketches/{0:d}'.format(self.id)
-        super(Sketch, self).__init__(api=api, resource_uri=self._resource_uri)
-
-    @property
-    def name(self):
-        """Property that returns sketch name.
-
-        Returns:
-            Sketch name as string.
-        """
-        if not self._sketch_name:
-            sketch = self.lazyload_data()
-            self._sketch_name = sketch[u'objects'][0][u'name']
-        return self._sketch_name
-
-    @property
-    def description(self):
-        """Property that returns sketch description.
-
-        Returns:
-            Sketch description as string.
-        """
-        sketch = self.lazyload_data()
-        return sketch[u'objects'][0][u'description']
-
-    @property
-    def status(self):
-        """Property that returns sketch status.
-
-        Returns:
-            Sketch status as string.
-        """
-        sketch = self.lazyload_data()
-        return sketch[u'objects'][0][u'status'][0][u'status']
-
-    def list_views(self):
-        """List all saved views for this sketch.
-
-        Returns:
-            List of views (instances of View objects)
-        """
-        sketch = self.lazyload_data()
-        views = []
-        for view in sketch[u'meta'][u'views']:
-            view_obj = View(
-                view_id=view[u'id'],
-                view_name=view[u'name'],
-                sketch_id=self.id,
-                api=self.api)
-            views.append(view_obj)
-        return views
-
-    def list_timelines(self):
-        """List all timelines for this sketch.
-
-        Returns:
-            List of timelines (instances of Timeline objects)
-        """
-        sketch = self.lazyload_data()
-        timelines = []
-        for timeline in sketch[u'objects'][0][u'timelines']:
-            timeline_obj = Timeline(
-                timeline_id=timeline[u'id'],
-                sketch_id=self.id,
-                api=self.api,
-                name=timeline[u'name'],
-                searchindex=timeline[u'searchindex'][u'index_name'])
-            timelines.append(timeline_obj)
-        return timelines
-
-    def upload(self, timeline_name, file_path):
-        """Upload a CSV, JSONL, or Plaso file to the server for indexing.
-
-        Args:
-            timeline_name: Name of the resulting timeline.
-            file_path: Path to the file to be uploaded.
-
-        Returns:
-            Timeline object instance.
-        """
-        resource_url = u'{0:s}/upload/'.format(self.api.api_root)
-        files = {u'file': open(file_path, 'rb')}
-        data = {u'name': timeline_name, u'sketch_id': self.id}
-        response = self.api.session.post(resource_url, files=files, data=data)
-        response_dict = response.json()
-        timeline = response_dict[u'objects'][0]
-        timeline_obj = Timeline(
-            timeline_id=timeline[u'id'],
-            sketch_id=self.id,
-            api=self.api,
-            name=timeline[u'name'],
-            searchindex=timeline[u'searchindex'][u'index_name'])
-        return timeline_obj
-
-    def add_timeline(self, searchindex):
-        """Add timeline to sketch.
-
-        Args:
-            searchindex: SearchIndex object instance.
-
-        Returns:
-            Timeline object instance.
-        """
-        resource_url = u'{0:s}/sketches/{1:d}/timelines/'.format(
-            self.api.api_root, self.id)
-        form_data = {u'timeline': searchindex.id}
-        response = self.api.session.post(resource_url, json=form_data)
-
-        if response.status_code not in HTTP_STATUS_CODE_20X:
-            raise RuntimeError(u'Failed adding timeline')
-
-        response_dict = response.json()
-        timeline = response_dict[u'objects'][0]
-        timeline_obj = Timeline(
-            timeline_id=timeline[u'id'],
-            sketch_id=self.id,
-            api=self.api,
-            name=timeline[u'name'],
-            searchindex=timeline[u'searchindex'][u'index_name'])
-        return timeline_obj
-
-    def explore(self,
-                query_string=None,
-                query_dsl=None,
-                query_filter=None,
-                view=None):
-        """Explore the sketch.
-
-        Args:
-            query_string: Elasticsearch query string.
-            query_dsl: Elasticsearch query DSL as JSON string.
-            query_filter: Filter for the query as JSON string.
-            view: View object instance (optional).
-
-        Returns:
-            Dictionary with query results.
-        """
-        default_filter = {
-            u'time_start': None,
-            u'time_end': None,
-            u'limit': 40,
-            u'indices': u'_all',
-            u'order': u'asc'
-        }
-
-        if not (query_string or query_filter or query_dsl or view):
-            raise RuntimeError(u'You need to supply a query or view')
-
-        if not query_filter:
-            query_filter = default_filter
-
-        if view:
-            query_string = view.query_string
-            query_filter = json.loads(view.query_filter)
-            query_dsl = json.loads(view.query_dsl)
-
-        resource_url = u'{0:s}/sketches/{1:d}/explore/'.format(
-            self.api.api_root, self.id)
-
-        form_data = {
-            u'query': query_string,
-            u'filter': query_filter,
-            u'dsl': query_dsl,
-        }
-        response = self.api.session.post(resource_url, json=form_data)
-        return response.json()
-
-    def add_event(self, message, timestamp,timestamp_desc):
-        """Adds an event to the sketch specific timeline.
-
-        Args:
-            message: Array of JSON objects representing events.
-            timestamp: Timestamp of the event.
-            timestamp_desc : Description of the timestamp.
-
-        Returns:
-            Dictionary with query results.
-        """
-        form_data = {
-            'timestamp': timestamp,
-            'timestamp_desc': timestamp_desc,
-            'message': message
-        }
-
-        resource_url = u'{0:s}/sketches/{1:d}/event/create/'.format(
-            self.api.api_root, self.id)
-        response = self.api.session.post(resource_url, json=form_data)
-        return response.json()
-
-    def comment_event(self, event_id, index, comment_text):
-        """
-        Adds a comment to a single event.
-
-        :param event_id:
-        :param index:
-        :param comment_text:
-        :return: a json data of the query.
-        """
-        form_data = \
-            {"annotation": comment_text,
-             "annotation_type": "comment",
-             "events": {"_id": event_id, "_index": index,
-                        "_type": "generic_event"}}
-        resource_url = u'{0:s}/sketches/{1:d}/event/annotate/'.format(
-            self.api.api_root, self.id)
-        response = self.api.session.post(resource_url, json=form_data)
-        return response.json()
-
-    def label_event(self, event_id, index, label_text):
-        """
-        Adds a comment to a single event.
-
-        :param event_id:
-        :param index:
-        :param label_text:
-        :return: a json data of the query.
-        """
-        form_data = \
-            {"annotation": label_text,
-             "annotation_type": "label",
-             "events": {"_id": event_id, "_index": index,
-                        "_type": "generic_event"}}
-        resource_url = u'{0:s}/sketches/{1:d}/event/annotate/'.format(
-            self.api.api_root, self.id)
-        response = self.api.session.post(resource_url, json=form_data)
-        return response.json()
-
-
-    def label_events(self, events, label_name):
-        """Labels one or more events with label_name.
-
-        Args:
-            events: Array of JSON objects representing events.
-            label_name: String to label the event with.
-
-        Returns:
-            Dictionary with query results.
-        """
-        form_data = {
-            '_id':self.id,
-            'annotation': label_name,
-            'annotation_type': 'label',
-            'events': events
-        }
-        print(form_data)
-        resource_url = u'{0:s}/sketches/{1:d}/event/annotate/'.format(
-            self.api.api_root, self.id)
-        response = self.api.session.post(resource_url, json=form_data)
-        return response.json()
-
-    def search_by_label(self, label_name):
-        """Searches for all events containing a given label.
-
-        Args:
-            label_name: A string representing the label to search for.
-
-        Returns:
-            A dictionary with query results.
-        """
-        query = {
-            "nested": {
-                "path": "timesketch_label",
-                "query": {
-                    "bool": {
-                        "must": [
-                            {
-                                "term": {
-                                    "timesketch_label.name": label_name
-                                }
-                            },
-                            {
-                                "term": {
-                                    "timesketch_label.sketch_id": self.id
-                                }
-                            }
-                        ]
-                    }
-                }
-            }
-        }
-        return self.explore(query_dsl=json.dumps({'query': query}))
-
-
-class SearchIndex(BaseResource):
-    """Timesketch searchindex object.
-
-    Attributes:
-        id: The ID of the search index.
-        api: An instance of TimesketchApi object.
-    """
-
-    def __init__(self, searchindex_id, api, searchindex_name=None):
-        """Initializes the SearchIndex object.
-
-        Args:
-            searchindex_id: Primary key ID of the searchindex.
-            searchindex_name: Name of the searchindex (optional).
-        """
-        self.id = searchindex_id
-        self._searchindex_name = searchindex_name
-        self._resource_uri = u'searchindices/{0:d}'.format(self.id)
-        super(SearchIndex, self).__init__(
-            api=api, resource_uri=self._resource_uri)
-
-    @property
-    def name(self):
-        """Property that returns searchindex name.
-
-        Returns:
-            Searchindex name as string.
-        """
-        if not self._searchindex_name:
-            searchindex = self.lazyload_data()
-            self._searchindex_name = searchindex[u'objects'][0][u'name']
-        return self._searchindex_name
-
-    @property
-    def index_name(self):
-        """Property that returns Elasticsearch index name.
-
-        Returns:
-            Elasticsearch index name as string.
-        """
-        searchindex = self.lazyload_data()
-        return searchindex[u'objects'][0][u'index_name']
-
-
-class View(BaseResource):
-    """Saved view object.
-
-    Attributes:
-        id: Primary key of the view.
-        name: Name of the view.
-    """
-
-    def __init__(self, view_id, view_name, sketch_id, api):
-        """Initializes the View object.
-
-        Args:
-            view_id: Primary key ID for the view.
-            view_name: The name of the view.
-            sketch_id: ID of a sketch.
-            api: Instance of a TimesketchApi object.
-        """
-        self.id = view_id
-        self.name = view_name
-        resource_uri = u'sketches/{0:d}/views/{1:d}/'.format(sketch_id, self.id)
-        super(View, self).__init__(api, resource_uri)
-
-    @property
-    def query_string(self):
-        """Property that returns the views query string.
-
-        Returns:
-            Elasticsearch query as string.
-        """
-        view = self.lazyload_data()
-        return view[u'objects'][0][u'query_string']
-
-    @property
-    def query_filter(self):
-        """Property that returns the views filter.
-
-        Returns:
-            Elasticsearch filter as JSON string.
-        """
-        view = self.lazyload_data()
-        return view[u'objects'][0][u'query_filter']
-
-    @property
-    def query_dsl(self):
-        """Property that returns the views query DSL.
-
-        Returns:
-            Elasticsearch DSL as JSON string.
-        """
-        view = self.lazyload_data()
-        return view[u'objects'][0][u'query_dsl']
-
-
-class Timeline(BaseResource):
-    """Timeline object.
-
-    Attributes:
-        id: Primary key of the view.
-    """
-
-    def __init__(self, timeline_id, sketch_id, api, name=None,
-                 searchindex=None):
-        """Initializes the Timeline object.
-
-        Args:
-            timeline_id: The primary key ID of the timeline.
-            sketch_id: ID of a sketch.
-            api: Instance of a TimesketchApi object.
-            name: Name of the timeline (optional)
-            searchindex: The Elasticsearch index name (optional)
-        """
-        self.id = timeline_id
-        self._name = name
-        self._searchindex = searchindex
-        resource_uri = u'sketches/{0:d}/timelines/{1:d}/'.format(
-            sketch_id, self.id)
-        super(Timeline, self).__init__(api, resource_uri)
-
-    @property
-    def name(self):
-        """Property that returns timeline name.
-
-        Returns:
-            Timeline name as string.
-        """
-        if not self._name:
-            timeline = self.lazyload_data()
-            self._name = timeline[u'objects'][0][u'name']
-        return self._name
-
-    @property
-    def index(self):
-        """Property that returns index name.
-
-        Returns:
-            Elasticsearch index name as string.
-        """
-        if not self._searchindex:
-            timeline = self.lazyload_data()
-            index_name = timeline[u'objects'][0][u'searchindex'][u'index_name']
-            self._searchindex = index_name
-        return self._searchindex
+    def refresh_oauth_token(self):
+        """Refresh an OAUTH token if one is defined."""
+        if not self.credentials:
+            return
+        request = google.auth.transport.requests.Request()
+        self.credentials.credential.refresh(request)
