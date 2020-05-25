@@ -47,9 +47,7 @@ def login():
     :return: api_client object with a valid session
     """
     try:
-        logger.debug("Login attampt to " + TIMESKETCH_BASEURL)
         c_api_client = TimesketchApi(TIMESKETCH_BASEURL, username=TIMESKETCH_USERNAME, password=TIMESKETCH_PASSWORD)
-        logger.debug("Login attampt status")
 
         return c_api_client
     except:
@@ -228,8 +226,6 @@ def explore_sketch(api_client, a_sketchid,a_searchterm):
         t.add_row([source.get('datetime'), source.get('message'), ('[%s]' % ', '.join(map(str, source.get('label')))),current_sketch.get("_id"), current_sketch.get("_index")])
     print(t)
 
-    logger.debug(search_results)
-
 
 def get_date(a_date):
     """
@@ -403,6 +399,32 @@ def sketch(c_args):
         else:
             logger.error("no sketch ID given")
             print("no sketch ID given")
+    elif c_args.option == 'analyze':
+        if c_args.sketchid is not None:
+            current_sketch = c_api_client.get_sketch(int(c_args.sketchid))
+            if c_args.analyzer is not None:
+                current_sketch = c_api_client.get_sketch(int(c_args.sketchid))
+                if c_args.timeline is not None:
+                    sketch = c_api_client.get_sketch(int(c_args.sketchid))
+                    result = sketch.run_analyzer(c_args.analyzer, timeline_id=int(c_args.timeline))
+                    print(result)
+                    result2 = sketch.get_analyzer_status() # will give all the ran analyzers, so need to filter
+                    for job in result2:
+                        #print(job['index'])
+                        #print(job)
+                        if (job['analyzer'] == c_args.analyzer):
+                            if (job['timeline_id'] == int(c_args.timeline)):
+                                import pprint
+                                pp = pprint.PrettyPrinter(indent=4)
+                                pp.pprint(job)
+                else:
+                    logger.error("no timeline given")
+            else:
+                    logger.error("no analyzer name given")
+        else:
+            logger.error("no sketch ID given")
+            print("no sketch ID given")
+
 
 
 
@@ -417,19 +439,46 @@ def sketches(args):
     list_sketches(api_client)
 
 
-def searchindices(args):
+def searchindices(c_args):
     """
 
-    :param args: provide all args given in the command line
+    :param c_args: provide all args given in the command line
     """
     api_client = login()
-    search_results = api_client.list_searchindices()
-    t = PrettyTable(['id', "Searchindex name"])
-    for current_element in search_results:
-        t.add_row([current_element.id, current_element.name])
-    print(t)
 
-    logger.debug(search_results)
+    if c_args.option == 'list':
+        search_results = api_client.list_searchindices()
+        t = PrettyTable(['id', "name", "Searchindex name"])
+        for current_element in search_results:
+            t.add_row([current_element.id, current_element.name, current_element.index_name])
+        print(t)
+
+    if c_args.option == 'merge': # DOES NOT WORK RIGHT NOW
+
+        print("before")
+        search_results = api_client.list_searchindices()
+        t = PrettyTable(['id', "Searchindex name"])
+        for current_element in search_results:
+            t.add_row([current_element.id, current_element.name])
+        print(t)
+
+        if args.index_id1 is None:
+            args.index_id1 = input("please provide index_id1")
+        if args.index_id2 is None:
+            args.index_id2 = input("please provide index_id2")
+        print("going to merge two indices...")
+        logger.debug(args.index_id1)
+        logger.debug(args.index_id2)
+        merge_results = api_client.merge_searchindex(args.index_id1,args.index_id2)
+
+        print("after:")
+
+        search_results = api_client.list_searchindices()
+        t = PrettyTable(['id', "name", "Searchindex name" ])
+        for current_element in search_results:
+            t.add_row([current_element.id, current_element.name,current_element.index_name])
+        print(t)
+
 
 
 def event(c_args):
@@ -497,10 +546,14 @@ if __name__ == "__main__":
     parser_sketch = subparser.add_parser('sketch', description="Interact with a particular sketch")
     parser_sketch.add_argument('-sid', '--sketchid', help='output result value', action='store', required=False)
     parser_sketch.add_argument('-o', '--option', help='output result value', action='store', required=False,
-                                     choices=['list','search','create','addevent','explore'],
+                                     choices=['list','search','create','addevent','explore','analyze'],
                                      default='list')
     parser_sketch.add_argument('-st', '--searchterm', help='output result value', action='store', required=False)
     parser_sketch.add_argument('-n', '--name', help='name of the (potential) sketch', action='store', required=False)
+    parser_sketch.add_argument('-tl', '--timeline', help='timeline value', action='store', required=False)
+    parser_sketch.add_argument('-a', '--analyzer', help='analyser name', action='store', required=False)
+
+
 
     parser_sketch.set_defaults(func=sketch)
 
@@ -525,8 +578,10 @@ if __name__ == "__main__":
     # searchindices
     parser_searchindices = subparser.add_parser('searchindices', description="Interact with an event")
     parser_searchindices.add_argument('-o', '--option', help='output result value', action='store', required=False,
-                                     choices=['list'],
+                                     choices=['list','merge'],
                                      default='list')
+    parser_searchindices.add_argument("-iid1", "--index_id1", nargs='?', help="index_id1")
+    parser_searchindices.add_argument("-iid2", "--index_id2", nargs='?', help="index_id1")
     parser_searchindices.set_defaults(func=searchindices)
 
     # upload
