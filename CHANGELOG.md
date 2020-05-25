@@ -1,3 +1,7 @@
+# 2020-05-20
+
+* introduce running analyzers from command line
+
 # 2018-11-23
 
 * tsctl vs. timesketch-tools

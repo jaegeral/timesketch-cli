@@ -310,6 +310,7 @@ class Sketch(resource.BaseResource):
                 continue
             for result in objects[0]:
                 stat = {
+                    'id': result.get('id', 'N/A'),
                     'index': timeline_obj.index,
                     'timeline_id': timeline_obj.id,
                     'analyzer': result.get('analyzer_name', 'N/A'),

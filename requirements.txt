@@ -1,8 +1,8 @@
 timesketch_api_client
-logging
 configparser
 argparse
 prettytable
 bs4
 urllib3
 git+https://github.com/MISP/PyTaxonomies
+bs4

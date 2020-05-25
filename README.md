@@ -64,20 +64,20 @@ Event added, ID: 41 Date:2018-11-09T09:46:46+00:00 timestamp desc this is a desc
 You can list sketches in your timesketch instance
 
 ```
-timesketch-tools.py -ls
+python3 timesketch-tools.py sketches -o list
      
          _______               __       __      __ 
         /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
          / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
-        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.2
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.4
 
             
-+-----+-----------------------------+
-|  id |             Name            |
-+-----+-----------------------------+
-| 130 |     test1Untitled sketch    |
-|  3  | The Greendale investigation |
-+-----+-----------------------------+
+Namespace(func=<function sketches at 0x7f1443dac710>, option='list')
++----+------+
+| id | Name |
++----+------+
+| 1  | aaa  |
++----+------+
 
 ```
 
@@ -246,6 +246,71 @@ Searching for: '*win*' in sketch 'aaaUntitled sketch'
 +---------------------------+----------------------------------------------------------+--------+----------------------+----------------------------------+
 
 ````
+
+## analyzer sketch with analyzer
+
+````
+python3 timesketch-tools.py sketch -o list -sid 1
+     
+         _______               __       __      __ 
+        /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
+         / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.5
+
++----+--------------------------------------------------------------------+
+| id |                                Name                                |
++----+--------------------------------------------------------------------+
+| 22 |                     disablestop-eventlog.evtx                      |
++----+--------------------------------------------------------------------+
+````
+
+Run it:
+
+```
+timesketch-tools.py sketch -o analyze -sid 1 -tl 22 -a sigma_windows
+     
+         _______               __       __      __ 
+        /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
+         / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.5
+
+            
+{'objects': [{'analysis_session': 75}]}
+```
+
+In the celery log you will see:
+````
+[sigma_windows] result: Applied 2 tags
+* win_susp_time_modification: 0
+* win_susp_eventlog_cleared: 2
+* win_susp_security_eventlog_cleared: 0
+* win_susp_wmi_login: 0
+* win_susp_add_sid_history: 0
+* win_account_discovery: 0
+* win_user_creation: 0
+* win_susp_codeintegrity_check_failure: 0
+* win_usb_device_plugged: 0
+````
+
+Verify the findings:
+```
+timesketch-tools.py sketch -o search -sid 1 -st *win_susp_eventlog_cleared*
+     
+         _______               __       __      __ 
+        /_  __(_)_ _  ___ ___ / /_____ / /_____/ / 
+         / / / /  ' \/ -_|_-</  '_/ -_) __/ __/ _          
+        /_/ /_/_/_/_/\__/___/_/\_\__/\__/\__/_//_/-tools v0.5
+
+            
+Searching for: '*win_susp_eventlog_cleared*' in sketch 'aaa'
++---------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+----------------------+----------------------------------+
+|          datetime         |                                                                                message                                                                                | labels |         _id          |              _index              |
++---------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+----------------------+----------------------------------+
+| 2019-04-27T21:04:26+00:00 | [104 / 0x0068] Source Name: Microsoft-Windows-Eventlog Strings: ['jwrig', 'DESKTOP-JR78RLP', 'System'] Computer Name: DESKTOP-JR78RLP Record Number: 1 Event Level: 4 |   []   | -J1VS3IB6L88DsjUZZdv | 1c4b78a002ec4d199f6e93540e4ea315 |
+| 2019-04-27T21:04:32+00:00 | [104 / 0x0068] Source Name: Microsoft-Windows-Eventlog Strings: ['jwrig', 'DESKTOP-JR78RLP', 'System'] Computer Name: DESKTOP-JR78RLP Record Number: 1 Event Level: 4 |   []   | -Z1VS3IB6L88DsjUZZdv | 1c4b78a002ec4d199f6e93540e4ea315 |
++---------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+----------------------+----------------------------------+
+```
+
 
 # timesketch-tools vs tsctl
 
