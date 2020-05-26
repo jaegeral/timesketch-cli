@@ -463,17 +463,15 @@ class TimesketchApi(object):
         return self.get_searchindex(searchindex_id), created
 
     def merge_searchindex(self,
-                                  searchindex_name,searchindex_name2,
-                                  es_index_name=None,
-                                  es_index_name2=None,
+                                  searchindex_name=None,searchindex_name2=None,
+                                  sketch_id=None,
                                   public=False):
         """Create a new searchindex.
 
         Args:
             searchindex_name: Name of the searchindex in Timesketch.
             searchindex_name2: Name of the searchindex in Timesketch.
-            es_index_name: Name of the index in Elasticsearch.
-            es_index_name2: Name of the index in Elasticsearch.
+            sketch_id: Name of the index in Elasticsearch.
             public: Boolean indicating if the searchindex should be public.
 
         Returns:
@@ -481,24 +479,11 @@ class TimesketchApi(object):
             object was created.
         """
 
-        resource_uri = '_forcemerge'
-        print(searchindex_name)
-        resource_url = '{0:s}/{1:s},{2:s}/{3:s}'.format(self.api_root,searchindex_name,searchindex_name2, resource_uri)
-        print(resource_url)
+        resource_uri = 'sketches'
+        resource_url = '{0:s}/{1:s}/{2:s}/merge_timelines/{3:s}/{4:s}'.format(self.api_root, resource_uri,sketch_id,searchindex_name,searchindex_name2)
+        response = self.session.post(resource_url)
+        return response.text
 
-        form_data = {}
-        response = self.session.post(resource_url, json=form_data)
-        print(response.text)
-        if response.status_code not in definitions.HTTP_STATUS_CODE_20X:
-            error.error_message(
-                response, message='Error creating searchindex',
-                error=RuntimeError)
-
-        response_dict = response.json()
-        metadata_dict = response_dict['meta']
-        created = metadata_dict.get('created', False)
-        searchindex_id = response_dict['objects'][0]['id']
-        return self.get_searchindex(searchindex_id), created
 
     def list_searchindices(self):
         """Get list of all searchindices that the user has access to.

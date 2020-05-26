@@ -457,21 +457,23 @@ def searchindices(c_args):
 
         print("before")
         search_results = api_client.list_searchindices()
-        t = PrettyTable(['id', "Searchindex name"])
+        t = PrettyTable(['id', "Searchindex name","index_id"])
         for current_element in search_results:
-            t.add_row([current_element.id, current_element.name])
+            t.add_row([current_element.id, current_element.name, current_element.index_name])
         print(t)
 
         if args.index_id1 is None:
             args.index_id1 = input("please provide index_id1")
         if args.index_id2 is None:
             args.index_id2 = input("please provide index_id2")
+        if args.sketch_id is None:
+            args.sketch_id = input("please provide sketch_id")
         print("going to merge two indices...")
         logger.debug(args.index_id1)
         logger.debug(args.index_id2)
-        merge_results = api_client.merge_searchindex(args.index_id1,args.index_id2)
+        merge_results = api_client.merge_searchindex(args.index_id1,args.index_id2,sketch_id=args.sketch_id)
 
-        print("after:")
+        print("after: "+str(merge_results))
 
         search_results = api_client.list_searchindices()
         t = PrettyTable(['id', "name", "Searchindex name" ])
@@ -582,6 +584,8 @@ if __name__ == "__main__":
                                      default='list')
     parser_searchindices.add_argument("-iid1", "--index_id1", nargs='?', help="index_id1")
     parser_searchindices.add_argument("-iid2", "--index_id2", nargs='?', help="index_id1")
+    parser_searchindices.add_argument('-sid', '--sketch_id', help='output result value', action='store', required=False)
+
     parser_searchindices.set_defaults(func=searchindices)
 
     # upload
