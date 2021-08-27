@@ -69,6 +69,38 @@ def list_sketches(a_api_client=None):
         t.add_row([current_sketch.id, current_sketch.name])
     print(t)
 
+def modify_collaboration(a_api_client=None, sketchid="-1", isPublic = "keepcurrentvalue",usersToAdd=[],groupsToAdd=[], usersToRemove=[], groupsToRemove=[] ):
+    """
+
+    Modify collaboration settings on a sketch
+    :param a_api_client: login needed before
+
+    :isPublic: choices=['true', 'false','keepcurrentvalue']
+    :sketchID: ID is required to modify collaborators
+    :usersToAdd: Optional list of users to add to the sketch
+    :groupsToAdd: Optional list of groups to add to the sketch
+    :usersToRemove: Optional list of users to remove from the sketch
+    :groupsToRemove: description: Optional list of groups to remove from the sketch
+    "Return: Boolean success status
+    """
+    if sketchid=="-1":
+      return False #no id provided
+
+    #ensure user and group are lists
+    if a_api_client is None:
+        a_api_client = login()
+    if type(usersToAdd) != list:
+      usersToAdd = [usersToAdd]
+    if type(groupsToAdd) != list:
+      groupsToAdd = [groupsToAdd]
+    if type(usersToRemove) != list:
+      usersToRemove = [usersToRemove]
+    if type(groupsToRemove) != list:
+      groupsToRemove = [groupsToRemove]
+    success = a_api_client.modify_collab( isPublic, sketchid, usersToAdd, groupsToAdd, usersToRemove, groupsToRemove)
+    return success
+
+
 def list_timelines_in_sketch(a_api_client=None,sketch_id=None):
     if a_api_client is None:
         a_api_client = login()
@@ -438,7 +470,16 @@ def sketches(args):
     print(args)
     list_sketches(api_client)
 
+def collaboration(args):
+    """
 
+    :param args:
+    """
+    api_client = login()
+    print(args)
+    success = modify_collaboration(api_client,args.sketchid,args.public,args.adduser, args.addgroup,args.removeuser, args.removegroup)
+    print("success=" +str(success))
+    
 def searchindices(c_args):
     """
 
@@ -583,6 +624,22 @@ if __name__ == "__main__":
     parser_searchindices.add_argument("-iid1", "--index_id1", nargs='?', help="index_id1")
     parser_searchindices.add_argument("-iid2", "--index_id2", nargs='?', help="index_id1")
     parser_searchindices.set_defaults(func=searchindices)
+
+    # collaboration
+    parser_collaboration = subparser.add_parser('collaboration', description="Modify sketch collaboration")
+    parser_collaboration.add_argument('-sid', '--sketchid', help='Sketch id', action='store', required=True)
+    parser_collaboration.add_argument('-p', '--public', help='Is sketch public', action='store', required=False,
+                                      choices=['true', 'false','keepcurrentvalue'],
+                                      default='keepcurrentvalue')
+    parser_collaboration.add_argument('-au', '--adduser', help='User to add to the sketch', action='store', required=False,
+                                      default=[])
+    parser_collaboration.add_argument('-ag', '--addgroup', help='Group to add to the sketch', action='store', required=False,
+                                      default=[])
+    parser_collaboration.add_argument('-ru', '--removeuser', help='User to remove from the sketch', action='store', required=False,
+                                      default=[])
+    parser_collaboration.add_argument('-rg', '--removegroup', help='Group to remove from the sketch', action='store', required=False,
+                                      default=[])
+    parser_collaboration.set_defaults(func=collaboration)
 
     # upload
     parser_sketch = subparser.add_parser('upload', description="Upload something")
