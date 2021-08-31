@@ -80,8 +80,8 @@ def modify_collaboration(a_api_client=None, sketchid="-1", isPublic = "keepcurre
     :usersToAdd: Optional list of users to add to the sketch
     :groupsToAdd: Optional list of groups to add to the sketch
     :usersToRemove: Optional list of users to remove from the sketch
-    :groupsToRemove: description: Optional list of groups to remove from the sketch
-    "Return: Boolean success status
+    :groupsToRemove: Optional list of groups to remove from the sketch
+    :Return: Boolean success status
     """
     if sketchid=="-1":
       return False #no id provided
