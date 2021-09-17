@@ -69,7 +69,7 @@ def list_sketches(a_api_client=None):
         t.add_row([current_sketch.id, current_sketch.name])
     print(t)
 
-def modify_collaboration(a_api_client=None, sketchid="-1", isPublic = "keepcurrentvalue",usersToAdd=[],groupsToAdd=[], usersToRemove=[], groupsToRemove=[] ):
+def modify_collaboration(a_api_client=None, sketchid="-1", isPublic = "keepcurrentvalue",usersToAdd=[],groupsToAdd=[], usersToRemove=[], groupsToRemove=[], permissions=[] ):
     """
 
     Modify collaboration settings on a sketch
@@ -97,7 +97,15 @@ def modify_collaboration(a_api_client=None, sketchid="-1", isPublic = "keepcurre
       usersToRemove = [usersToRemove]
     if type(groupsToRemove) != list:
       groupsToRemove = [groupsToRemove]
-    success = a_api_client.modify_collab( isPublic, sketchid, usersToAdd, groupsToAdd, usersToRemove, groupsToRemove)
+    if type(permissions) != list:
+      permissions = [permissions]
+
+    sketch = a_api_client.get_sketch(int(sketchid))
+    if usersToAdd or groupsToAdd:
+      success = sketch.add_to_acl( usersToAdd, groupsToAdd, isPublic, permissions)
+
+    if usersToRemove or groupsToRemove:
+      success = sketch.remove_acl(usersToRemove, groupsToRemove, isPublic, permissions)
     return success
 
 
@@ -477,7 +485,7 @@ def collaboration(args):
     """
     api_client = login()
     print(args)
-    success = modify_collaboration(api_client,args.sketchid,args.public,args.adduser, args.addgroup,args.removeuser, args.removegroup)
+    success = modify_collaboration(api_client,args.sketchid,args.public,args.adduser, args.addgroup,args.removeuser, args.removegroup, args.permissions)
     print("success=" +str(success))
     
 def searchindices(c_args):
@@ -625,12 +633,11 @@ if __name__ == "__main__":
     parser_searchindices.add_argument("-iid2", "--index_id2", nargs='?', help="index_id1")
     parser_searchindices.set_defaults(func=searchindices)
 
-    # collaboration
+    # ACL - collaboration
     parser_collaboration = subparser.add_parser('collaboration', description="Modify sketch collaboration")
     parser_collaboration.add_argument('-sid', '--sketchid', help='Sketch id', action='store', required=True)
     parser_collaboration.add_argument('-p', '--public', help='Is sketch public', action='store', required=False,
-                                      choices=['true', 'false','keepcurrentvalue'],
-                                      default='keepcurrentvalue')
+                                      choices=['true'])
     parser_collaboration.add_argument('-au', '--adduser', help='User to add to the sketch', action='store', required=False,
                                       default=[])
     parser_collaboration.add_argument('-ag', '--addgroup', help='Group to add to the sketch', action='store', required=False,
@@ -638,6 +645,9 @@ if __name__ == "__main__":
     parser_collaboration.add_argument('-ru', '--removeuser', help='User to remove from the sketch', action='store', required=False,
                                       default=[])
     parser_collaboration.add_argument('-rg', '--removegroup', help='Group to remove from the sketch', action='store', required=False,
+                                      default=[])
+    parser_collaboration.add_argument('-perm', '--permissions', help='Sketch permissions to apply (read, write, delete)', action='store', required=False,
+                                      choices=['read', 'write','delete'],
                                       default=[])
     parser_collaboration.set_defaults(func=collaboration)
 
